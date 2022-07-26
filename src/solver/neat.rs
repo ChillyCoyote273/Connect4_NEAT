@@ -111,19 +111,14 @@ impl Network {
 	}
 
 	fn evaluate_node(self: &mut Network, node: usize) -> f32 {
-		let mut connections = Vec::new();
-		for connection in &self.connection_genes {
-			if connection.output == node {
-				connections.push((connection.input, connection.weight));
-			}
-		}
-
 		let mut acc = 0.0;
-		for connection in connections {
-			acc += connection.1 * match self.node_genes[connection.0].activation_value {
-				Some(x) => x,
-				None => self.evaluate_node(connection.0)
-			};
+		for i in 0..self.connection_genes.len() {
+			if self.connection_genes[i].output == node {
+				let prev_node = self.connection_genes[i].input;
+				acc += self.connection_genes[i].weight *
+					self.node_genes[prev_node].activation_value
+					.unwrap_or_else(|| self.evaluate_node(prev_node));
+			}
 		}
 
 		self.node_genes[node].give_input(acc);
