@@ -3,25 +3,57 @@ use rand::Rng;
 pub struct Neat {
 	node_list: Vec<Node>,
 	connection_list: Vec<Connection>,
-	connection_lookup: Vec<Vec<usize>> // for a given node index gives all connections leading away
+	connection_lookup: Vec<Vec<usize>>, // for a given node index gives all connections leading away
+	num_sensors: usize,
+	num_outputs: usize,
 }
 
 impl Neat {
+	pub fn new(num_sensors: usize, num_outputs: usize) -> Neat {
+		let mut group = Neat {
+			node_list: Vec::with_capacity(num_sensors + num_outputs + 1),
+			connection_list: Vec::new(),
+			connection_lookup: vec![Vec::new(); num_sensors + num_outputs + 1],
+			num_sensors: num_sensors,
+			num_outputs: num_outputs,
+		};
+		for i in 0..num_sensors {
+			group.node_list.push(Node {
+				innovation: i,
+				node_type: Type::Sensor,
+				activation_value: None
+			});
+		}
+		group.node_list.push(Node {
+			innovation: num_sensors,
+			node_type: Type::Bias,
+			activation_value: Some(1.0)
+		});
+		for i in num_sensors + 1..num_sensors + num_outputs + 1 {
+			group.node_list.push(Node {
+				innovation: i,
+				node_type: Type::Output,
+				activation_value: None
+			});
+		}
 
+		group
+	}
 }
 
-struct Connection {
-	innovation: usize,
-	input: usize,
-	output: usize,
-	weight: f32,
-	enabled: bool
+pub struct Connection {
+	pub innovation: usize,
+	pub input: usize,
+	pub output: usize,
+	pub weight: f32,
+	pub enabled: bool
 }
 
-enum Type {
+pub enum Type {
 	Sensor,
 	Output,
-	Hidden
+	Hidden,
+	Bias
 }
 
 impl Type {
@@ -29,7 +61,8 @@ impl Type {
 		match self {
 			Type::Sensor => Type::Sensor,
 			Type::Output => Type::Output,
-			Type::Hidden => Type::Hidden
+			Type::Hidden => Type::Hidden,
+			Type::Bias => Type::Bias
 		}
 	}
 
@@ -37,15 +70,16 @@ impl Type {
 		match *self {
 			Type::Sensor => input,
 			Type::Output => 1.0 / (1.0 + (-input).exp()),
-			Type::Hidden => input.max(0.0)
+			Type::Hidden => input.max(0.0),
+			Type::Bias => 1.0
 		}
 	}
 }
 
-struct Node {
-	innovation: usize,
-	node_type: Type,
-	activation_value: Option<f32>
+pub struct Node {
+	pub innovation: usize,
+	pub node_type: Type,
+	pub activation_value: Option<f32>
 }
 
 impl Clone for Node {
@@ -69,27 +103,31 @@ impl Node {
 	pub fn give_input(self: &mut Node, input: f32) {
 		self.activation_value = Some(self.node_type.activation(input));
 	}
+
+	pub fn clear(&mut self) {
+		self.activation_value = None;
+	}
 }
 
-struct Network {
-	node_genes: Vec<Node>,
-	connection_genes: Vec<Connection>,
-	num_sensors: usize,
-	num_outputs: usize
+pub struct Network {
+	pub node_genes: Vec<Node>,
+	pub connection_genes: Vec<Connection>,
+	pub num_sensors: usize,
+	pub num_outputs: usize
 }
 
 impl Network {
-	pub fn new(global: &mut Neat, sensors: usize, outputs: usize) -> Network {
-		let mut nodes = Vec::with_capacity(sensors + outputs + 1);
-		for i in 0..sensors + outputs + 1 {
+	pub fn new(global: &mut Neat) -> Network {
+		let mut nodes = Vec::with_capacity(global.num_sensors + global.num_outputs + 1);
+		for i in 0..global.num_sensors + global.num_outputs + 1 {
 			nodes.push(global.node_list[i].clone());
 		}
 
 		let mut network = Network {
 			node_genes: nodes,
 			connection_genes: Vec::new(),
-			num_sensors: sensors,
-			num_outputs: outputs
+			num_sensors: global.num_sensors,
+			num_outputs: global.num_outputs
 		};
 		network.add_connection(global);
 
@@ -106,6 +144,9 @@ impl Network {
 		for output_node in self.num_sensors + 1..self.num_outputs + self.num_sensors + 1 {
 			output.push(self.evaluate_node(output_node));
 		}
+		for node in &mut self.node_genes {
+			node.clear();
+		}
 		
 		output
 	}
@@ -113,7 +154,7 @@ impl Network {
 	fn evaluate_node(self: &mut Network, node: usize) -> f32 {
 		let mut acc = 0.0;
 		for i in 0..self.connection_genes.len() {
-			if self.connection_genes[i].output == node {
+			if self.connection_genes[i].enabled && self.connection_genes[i].output == node {
 				let prev_node = self.connection_genes[i].input;
 				acc += self.connection_genes[i].weight *
 					self.node_genes[prev_node].activation_value
@@ -136,8 +177,7 @@ impl Network {
 		}
 
 		let mut nodes_to_search = vec![to_node];
-		while nodes_to_search.len() > 0 {
-			let current_node = nodes_to_search.pop().unwrap();
+		while let Some(current_node) = nodes_to_search.pop() {
 			if possible_from_nodes[current_node] { // node hasn't been searched
 				possible_from_nodes[current_node] = false;
 
@@ -189,5 +229,6 @@ impl Network {
 			weight: 0.0,
 			enabled: true
 		});
+		global.connection_lookup[from_node].push(global.connection_list.len());
 	}
 }
