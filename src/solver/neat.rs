@@ -16,14 +16,13 @@ pub struct Neat {
 	interspecies_mating_rate: f64,
 	node_mutation_probability: f64,
 	connection_mutation_probability: f64,
-	compatability_constant_1: f64,
-	compatability_constant_2: f64,
-	compatability_constant_3: f64,
+	compatability_constants: (f64, f64, f64),
 	minimum_speciation_distance: f64,
 	stagnant_generation_limit: i32,
 	current_best_fitness: f32,
 	generations_since_last_improvement: i32,
 	species: Vec<Species>,
+	network_groupings: Vec<usize>,
 	network_fitnesses: Vec<f32>
 }
 
@@ -44,14 +43,13 @@ impl Neat {
 			interspecies_mating_rate: 0.001,
 			node_mutation_probability: 0.03,
 			connection_mutation_probability: 0.05,
-			compatability_constant_1: 1.0,
-			compatability_constant_2: 1.0,
-			compatability_constant_3: 0.4,
+			compatability_constants: (1.0, 1.0, 0.4),
 			minimum_speciation_distance: 3.0,
 			stagnant_generation_limit: 15,
 			current_best_fitness: 0.0,
 			generations_since_last_improvement: 0,
 			species: Vec::new(),
+			network_groupings: Vec::new(),
 			network_fitnesses: Vec::new()
 		}
 	}
@@ -82,6 +80,31 @@ impl Neat {
 		for individual in &mut self.population {
 			self.network_fitnesses.push(fitness_function(individual));
 		}
+	}
+
+	pub fn group_by_species(&mut self) {
+		self.network_groupings = Vec::with_capacity(self.population.len());
+		for i in 0..self.population.len() {
+			let mut new_species = true;
+			for j in 0..self.species.len() {
+				if self.minimum_speciation_distance >= self.species[j].get_distance(&mut self.population[i], self.compatability_constants) {
+					new_species = false;
+					self.species[j].add_individual(i);
+					self.network_groupings.push(j);
+					break;
+				}
+			}
+			if new_species {
+				let index = self.species.len();
+				self.network_groupings.push(index);
+				self.species.push(Species::new(&mut self.population[i]));
+				self.species[index].add_individual(i);
+			}
+		}
+	}
+
+	pub fn next_generation(&mut self, fitness_function: fn(&mut Network) -> f32) {
+		
 	}
 
 	pub fn _get_xor_network() -> Network {
@@ -165,7 +188,7 @@ impl Neat {
 
 struct Species {
 	genome: Vec<Connection>,
-	individuals: Vec<usize>
+	pub individuals: Vec<usize>
 }
 impl Species {
 	pub fn new(individual: &mut Network) -> Self {
@@ -179,7 +202,7 @@ impl Species {
 		self.individuals.push(number);
 	}
 
-	pub fn get_distance(&self, other: &mut Network, global: &Neat) -> f64 {
+	pub fn get_distance(&self, other: &mut Network, compatability_constants: (f64, f64, f64)) -> f64 {
 		let mut excess = 0.0;
 		let mut disjoint = 0.0;
 		let mut difference = 0.0;
@@ -221,7 +244,7 @@ impl Species {
 			i -= 1;
 		}
 
-		global.compatability_constant_1 * excess / genome_size + global.compatability_constant_2 * disjoint / genome_size + global.compatability_constant_3 * difference
+		compatability_constants.0 * excess / genome_size + compatability_constants.1 * disjoint / genome_size + compatability_constants.2 * difference
 	}
 }
 
