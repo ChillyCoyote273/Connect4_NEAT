@@ -35,7 +35,7 @@ impl Solver {
 			}
 		}
 
-		best_moves[rand::thread_rng().gen_range(0..best_moves.len())].0
+		best_moves[rand::thread_rng().gen_range(0, best_moves.len())].0
 	}
 
 	fn negamax_rec(self: &Solver, game: &Game, mut alpha: f32, beta: f32, mut depth: u32) -> f32 {

@@ -10,107 +10,34 @@ use solver::neat;
 
 fn main() {
 	let mut neat_test = neat::Neat::new(2, 1);
-	let mut test_network_1 = neat::Network::new(&mut neat_test);
-	let mut test_network_0 = neat::Network {
-		node_genes: vec![
-			neat::Node {
-				innovation: 0,
-				node_type: neat::Type::Sensor,
-				activation_value: None
-			},
-			neat::Node {
-				innovation: 1,
-				node_type: neat::Type::Sensor,
-				activation_value: None
-			},
-			neat::Node {
-				innovation: 2,
-				node_type: neat::Type::Bias,
-				activation_value: None
-			},
-			neat::Node {
-				innovation: 3,
-				node_type: neat::Type::Output,
-				activation_value: None
-			},
-			neat::Node {
-				innovation: 4,
-				node_type: neat::Type::Hidden,
-				activation_value: None
-			},
-			neat::Node {
-				innovation: 5,
-				node_type: neat::Type::Hidden,
-				activation_value: None
-			}
-		],
-		connection_genes: vec![
-			neat::Connection {
-				innovation: 0,
-				input: 0,
-				output: 4,
-				weight: 1.0,
-				enabled: true
-			},
-			neat::Connection {
-				innovation: 1,
-				input: 0,
-				output: 5,
-				weight: -1.0,
-				enabled: true
-			},
-			neat::Connection {
-				innovation: 2,
-				input: 1,
-				output: 4,
-				weight: -1.0,
-				enabled: true
-			},
-			neat::Connection {
-				innovation: 3,
-				input: 1,
-				output: 5,
-				weight: 1.0,
-				enabled: true
-			},
-			neat::Connection {
-				innovation: 4,
-				input: 4,
-				output: 3,
-				weight: 10.0,
-				enabled: true
-			},
-			neat::Connection {
-				innovation: 5,
-				input: 5,
-				output: 3,
-				weight: 10.0,
-				enabled: true
-			},
-			neat::Connection {
-				innovation: 6,
-				input: 2,
-				output: 3,
-				weight: -5.0,
-				enabled: true
-			}
-		],
-		num_sensors: 2,
-		num_outputs: 1
-	};
-	let input_vecs = vec![
-		vec![0.0, 0.0],
-		vec![0.0, 1.0],
-		vec![1.0, 0.0],
-		vec![1.0, 1.0],
-	];
-	for input_vec in input_vecs {
-		let results = test_network_1.feed_forward(&input_vec);
-		println!("{} ^ {} = {}", input_vec[0], input_vec[1], results[0]);
-	}
+	neat_test.generate_population(10);
+	neat_test.calculate_fitnesses(calculate_fitness);
 	// nannou::app(model)
 	// 	.view(view)
 	// 	.run();
+}
+
+fn reverse_mean_square_error(target: &Vec<f32>, output: Vec<f32>) -> f32 {
+	let mut acc = 0.0;
+	for i in 0..target.len() {
+		acc += 1.0 - (target[i] - output[i]) * (target[i] - output[i]);
+	}
+	acc
+}
+fn calculate_fitness(network: &mut neat::Network) -> f32 {
+	let data_vec:Vec<(Vec<f32>, Vec<f32>)> = vec![
+		(vec![0.0, 0.0], vec![0.0]),
+		(vec![0.0, 1.0], vec![1.0]),
+		(vec![1.0, 0.0], vec![1.0]),
+		(vec![1.0, 1.0], vec![0.0])
+	];
+
+	let mut total_fitness = 0.0;
+	for data in data_vec {
+		total_fitness += reverse_mean_square_error(&data.1, network.feed_forward(&data.0));
+	}
+
+	total_fitness
 }
 
 
