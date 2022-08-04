@@ -23,7 +23,7 @@ pub struct Neat {
 	stagnant_generation_limit: i32,
 	current_best_fitness: f32,
 	generations_since_last_improvement: i32,
-	species_representatives: Vec<Network>,
+	species: Vec<Species>,
 	network_fitnesses: Vec<f32>
 }
 
@@ -51,7 +51,7 @@ impl Neat {
 			stagnant_generation_limit: 15,
 			current_best_fitness: 0.0,
 			generations_since_last_improvement: 0,
-			species_representatives: Vec::new(),
+			species: Vec::new(),
 			network_fitnesses: Vec::new()
 		}
 	}
@@ -78,7 +78,10 @@ impl Neat {
 	}
 
 	pub fn calculate_fitnesses(&mut self, fitness_function: fn(&mut Network) -> f32) {
-
+		self.network_fitnesses = Vec::with_capacity(self.population.len());
+		for individual in &mut self.population {
+			self.network_fitnesses.push(fitness_function(individual));
+		}
 	}
 
 	pub fn _get_xor_network() -> Network {
@@ -160,6 +163,68 @@ impl Neat {
 	}
 }
 
+struct Species {
+	genome: Vec<Connection>,
+	individuals: Vec<usize>
+}
+impl Species {
+	pub fn new(individual: &mut Network) -> Self {
+		Self {
+			genome: individual.get_genome(),
+			individuals: Vec::new()
+		}
+	}
+
+	pub fn add_individual(&mut self, number: usize) {
+		self.individuals.push(number);
+	}
+
+	pub fn get_distance(&self, other: &mut Network, global: &Neat) -> f64 {
+		let mut excess = 0.0;
+		let mut disjoint = 0.0;
+		let mut difference = 0.0;
+		let other_genome = other.get_genome();
+		let genome_size = std::cmp::max(self.genome.len(), other_genome.len()) as f64;
+
+		let last_innovation = std::cmp::max(other_genome.last().unwrap().innovation, self.genome.last().unwrap().innovation);
+		let mut innovation_vectors = vec![vec![false; last_innovation + 1]; 2];
+		for gene in &self.genome {
+			innovation_vectors[0][gene.innovation] = true;
+		}
+		for gene in &other_genome {
+			innovation_vectors[1][gene.innovation] = true;
+		}
+
+		let mut i = last_innovation as i32;
+		let mut first = false;
+		let mut second = false;
+		let mut j = self.genome.len() - 1;
+		let mut k = other_genome.len() - 1;
+		while i >= 0 {
+			first = first || innovation_vectors[0][i as usize];
+			second = second || innovation_vectors[1][i as usize];
+
+			if innovation_vectors[0][i as usize] || innovation_vectors[1][i as usize] {
+				if innovation_vectors[0][i as usize] && innovation_vectors[1][i as usize] {
+					while i as usize != self.genome[j].innovation { j -= 1; }
+					while i as usize != other_genome[k].innovation { k -= 1; }
+					difference += (self.genome[j].weight - other_genome[k].weight).abs() as f64;
+				}
+				else if first && second {
+					disjoint += 1.0;
+				}
+				else {
+					excess += 1.0;
+				}
+			}
+
+			i -= 1;
+		}
+
+		global.compatability_constant_1 * excess / genome_size + global.compatability_constant_2 * disjoint / genome_size + global.compatability_constant_3 * difference
+	}
+}
+
 #[derive(Copy, Clone)]
 pub struct Connection {
 	innovation: usize,
@@ -203,9 +268,10 @@ impl Node {
 	}
 }
 
+#[derive(Clone)]
 pub struct Network {
 	node_genes: Vec<Node>,
-	pub connection_genes: Vec<Connection>,
+	connection_genes: Vec<Connection>,
 	num_sensors: usize,
 	num_outputs: usize
 }
@@ -394,9 +460,13 @@ impl Network {
 		self.connection_genes.push(connection_from);
 	}
 
-	pub fn cross(&mut self, other: &mut Self, global: &mut Neat) -> Self {
+	pub fn get_genome(&mut self) -> Vec<Connection> {
 		self.connection_genes.sort_by_key(|x| x.innovation);
-		other.connection_genes.sort_by_key(|x| x.innovation);
+
+		self.connection_genes.clone()
+	}
+
+	pub fn cross(&mut self, other: &mut Self, global: &mut Neat) -> Self {
 		let mut crossed_connections = self.connection_genes.clone();
 		let mut i = 0;
 		for connection in &mut crossed_connections {
