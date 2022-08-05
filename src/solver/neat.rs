@@ -1,4 +1,5 @@
 use rand::prelude::*;
+use rand::distributions::WeightedIndex;
 use rand_distr::StandardNormal;
 
 pub struct Neat {
@@ -104,7 +105,35 @@ impl Neat {
 	}
 
 	pub fn next_generation(&mut self, fitness_function: fn(&mut Network) -> f32) {
-		
+		self.calculate_fitnesses(fitness_function);
+		self.group_by_species();
+
+		for i in 0..self.population.len() {
+			self.network_fitnesses[i] /= self.species[self.network_groupings[i]].individuals.len() as f32;
+		}
+
+		let mut next_generation = Vec::with_capacity(self.population.len());
+		let mut next_species = Vec::with_capacity(self.species.len());
+		for species in &self.species {
+			if species.individuals.len() > 0 {
+				next_species.push(Species::new(&mut self.population[thread_rng().gen_range(0, species.individuals.len())]));
+				if species.individuals.len() > 4 {
+					let mut fittest_network = species.individuals[0];
+					let mut fittest_fitness = self.network_fitnesses[fittest_network];
+					for i in 1..species.individuals.len() {
+						let net = species.individuals[i];
+						if fittest_fitness < self.network_fitnesses[net] {
+							fittest_network = net;
+							fittest_fitness = self.network_fitnesses[fittest_network];
+						}
+					}
+					next_generation.push(self.population[fittest_network].clone());
+				}
+			}
+		}
+
+		let first_network_dist = WeightedIndex::new(&self.network_fitnesses).unwrap();
+		//todo
 	}
 
 	pub fn _get_xor_network() -> Network {
